@@ -44,14 +44,15 @@ namespace Classification
             public int count;
             public int correct;
         }
-        public static Hashtable columnCountTable = new Hashtable();
-        public static Hashtable wordCountTable = new Hashtable();
-        public static Hashtable stopWordTable = new Hashtable();
-        public static List<Hashtable> docFeatureTable = new List<Hashtable>();
-        public static List<string> fileList = new List<string>();
-        public static List<Hashtable> classWordTable = new List<Hashtable>();
-        public static Hashtable classIDFTable = new Hashtable();
-        
+        public static Hashtable columnCountTable;
+        public static Hashtable wordCountTable;
+        public static Hashtable stopWordTable;
+        public static List<Hashtable> docFeatureTable;
+        public static List<string> fileList;
+        public static List<Hashtable> classWordTable;
+        public static Hashtable classIDFTable;
+        public static int subjectWeight;
+
         public static Hashtable TFIDF()
         {
             Hashtable idfTable = new Hashtable();
@@ -243,13 +244,50 @@ namespace Classification
                         //Console.WriteLine(line);
                         if (line.Contains(": "))
                         {
-                            //columnCountTable[line.Split(new string[] { ": " }, StringSplitOptions.None)[0].Trim()] = file_names[j];
+                            string[] splitPart = line.Split(new string[] { ": " }, StringSplitOptions.None);
+                            string columnName = splitPart[0].Trim();
+                            string content = splitPart[splitPart.Length - 1];
+                            if (columnName.ToLower() == "subject")
+                            {
+                                foreach (string iter_word in Regex.Split(content, @"[^A-Za-z0-9_-]"))
+                                {
+                                    String word = iter_word.ToLower().Trim(new Char[] { '_', '-' });
+                                    double Num;
+                                    bool isNum = double.TryParse(word, out Num);
+                                    if (isNum)
+                                    {
+                                        continue;
+                                    }
+                                    stemmer.add(word.ToCharArray(), word.Length);
+                                    stemmer.stem();
+                                    word = stemmer.ToString();
+                                    if (word.Length == 0)
+                                    {
+                                        continue;
+                                    }
+                                    if (stopWordTable.ContainsKey(word))
+                                    {
+                                        continue;
+                                    }
+                                    sumWordCount += 1 * subjectWeight;
+                                    // word preprocess done
+                                    if (docWord.ContainsKey(word))
+                                    {
+                                        int temp = (int)docWord[word];
+                                        temp += 1 * subjectWeight;
+                                        docWord[word] = temp;
+                                    }
+                                    else
+                                    {
+                                        docWord[word] = 1 * subjectWeight;
+                                    }
+                                }
+                            }
                         }
                         else
                         {
                             break;
                         }
-                        counter++;
                     }
 
                     /******Text******/
@@ -313,62 +351,76 @@ namespace Classification
         }
         static void Main(string[] args)
         {
-            //Console.WriteLine(test());
-            //String text = System.IO.File.ReadAllLines();
-            Hashtable process_dictionary = new Hashtable();
-            StreamReader stopFile = new StreamReader(@"D:\work\KPMG\learning\project1\stopword.txt");
-            string line;
-            while ((line = stopFile.ReadLine()) != null)
+            for (int j = 10; j < 11; j += 3)
             {
-                stopWordTable[line.Trim()] = 1;
-            }
-            int[] trainingAnswer = ProcessDirectory(@"D:\work\KPMG\learning\project1\test_data\1\Training");
-            StreamWriter dicFile = new StreamWriter(@"D:\work\KPMG\learning\project1\dictionary_1.txt");
-            Hashtable idfTable = TFIDF();
-            idfTable = classIDFTable;
-            string[] dictionary = gen_dic(10000);
-            /*for (int i = 0; i < docFeatureTable.Count; i++)
-            {
-                List<string> wordList = docFeatureTable[i].Keys.Cast<string>().ToList();
-                foreach (string word in wordList)
+                columnCountTable = new Hashtable();
+                wordCountTable = new Hashtable();
+                stopWordTable = new Hashtable();
+                docFeatureTable = new List<Hashtable>();
+                fileList = new List<string>();
+                classWordTable = new List<Hashtable>();
+                classIDFTable = new Hashtable();
+                GC.Collect();
+                subjectWeight = j;
+                //Console.WriteLine(test());
+                //String text = System.IO.File.ReadAllLines();
+                Hashtable process_dictionary = new Hashtable();
+                StreamReader stopFile = new StreamReader(@"D:\work\KPMG\learning\project1\stopword.txt");
+                string line;
+                while ((line = stopFile.ReadLine()) != null)
                 {
-                    double temp = (double)docFeatureTable[i][word];
-                    if (process_dictionary.ContainsKey(word))
-                    {
-                        temp += (double)process_dictionary[word];
-                    }
-                    process_dictionary[word] = temp;
+                    stopWordTable[line.Trim()] = 1;
                 }
-            }
-            List<dicWord> process_list = new List<dicWord>();
-            string[] dictionary = new string[10005];
-            foreach (string word in process_dictionary.Keys)
-            {
-                dicWord temp;
-                temp.word = word;
-                temp.tfidf = (double)process_dictionary[word];
-                process_list.Add(temp);
-                //dicFile.WriteLine(word + ": " + process_dictionary[word]);
-            }
-            process_list.Sort((a, b) => b.tfidf.CompareTo(a.tfidf));
-            for (int i = 0; i < process_list.Count(); i++)// gen sorted dictionary
-            {
-                if (i >= 10000)
-                    break;
-                dictionary[i] = process_list[i].word;
-                dicFile.WriteLine(i + ": " + process_list[i].word + ": " + process_list[i].tfidf);
-            }*/
-            var trainingResult = new double[trainingAnswer.Count()][];
-            trainingResult = gen_training_data(trainingAnswer.Count(),dictionary);
-            KNearestNeighbors knn;
-            for (int i = 1; i <= 10; i++)
-            {
+                stopFile.Close();
+                int[] trainingAnswer = ProcessDirectory(@"D:\work\KPMG\learning\project1\test_data\1\Training");
+                //StreamWriter dicFile = new StreamWriter(@"D:\work\KPMG\learning\project1\dictionary_1.txt");
+                Hashtable idfTable = TFIDF();
+                idfTable = classIDFTable;
+                string[] dictionary = gen_dic(10000);
+                /*for (int i = 0; i < docFeatureTable.Count; i++)
+                {
+                    List<string> wordList = docFeatureTable[i].Keys.Cast<string>().ToList();
+                    foreach (string word in wordList)
+                    {
+                        double temp = (double)docFeatureTable[i][word];
+                        if (process_dictionary.ContainsKey(word))
+                        {
+                            temp += (double)process_dictionary[word];
+                        }
+                        process_dictionary[word] = temp;
+                    }
+                }
+                List<dicWord> process_list = new List<dicWord>();
+                string[] dictionary = new string[10005];
+                foreach (string word in process_dictionary.Keys)
+                {
+                    dicWord temp;
+                    temp.word = word;
+                    temp.tfidf = (double)process_dictionary[word];
+                    process_list.Add(temp);
+                    //dicFile.WriteLine(word + ": " + process_dictionary[word]);
+                }
+                process_list.Sort((a, b) => b.tfidf.CompareTo(a.tfidf));
+                for (int i = 0; i < process_list.Count(); i++)// gen sorted dictionary
+                {
+                    if (i >= 10000)
+                        break;
+                    dictionary[i] = process_list[i].word;
+                    dicFile.WriteLine(i + ": " + process_list[i].word + ": " + process_list[i].tfidf);
+                }*/
+                var trainingResult = new double[trainingAnswer.Count()][];
+                GC.Collect();
+                trainingResult = gen_training_data(trainingAnswer.Count(), dictionary);
+                KNearestNeighbors knn;
+                //for (int i = 3; i <= 10; i++)
+                //{
+                int i = 3;
                 Console.WriteLine("======================" + i + "======================");
                 knn = new KNearestNeighbors(k: i, classes: 20, inputs: trainingResult, outputs: trainingAnswer);
                 List<testResult> result = RunTest(@"D:\work\KPMG\learning\project1\test_data\1\Testing", dictionary, idfTable, knn);
-                System.IO.Directory.CreateDirectory(@"D:\work\KPMG\learning\project1\result\" + i);
-                StreamWriter resultFile = new StreamWriter(@"D:\work\KPMG\learning\project1\result\" + i + "\\test_result.csv");
-                StreamWriter statisticFile = new StreamWriter(@"D:\work\KPMG\learning\project1\result\" + i + "\\test_statistic.csv");
+                System.IO.Directory.CreateDirectory(@"D:\work\KPMG\learning\project1\result\" + j);
+                StreamWriter resultFile = new StreamWriter(@"D:\work\KPMG\learning\project1\result\" + j + "\\test_result.csv");
+                StreamWriter statisticFile = new StreamWriter(@"D:\work\KPMG\learning\project1\result\" + j + "\\test_statistic.csv");
                 Hashtable classResultMap = new Hashtable();
                 foreach (testResult temp in result)
                 {
@@ -398,15 +450,16 @@ namespace Classification
                 }
                 resultFile.Close();
                 statisticFile.Close();
+                // }
+                //Console.WriteLine(knn.Compute(trainingResult[13366]));
+                /*Console.WriteLine(Array.IndexOf(dictionary, "god"));
+                Console.WriteLine(Array.IndexOf(dictionary, "nonzero"));*/
+                /*for (int i = 1; i <= 10; i++)
+                {
+                    gen_test(@"D:\work\KPMG\learning\project1\20_newsgroups", @"D:\work\KPMG\learning\project1\test_data", i, 10);
+                }*/
+                //Console.ReadLine();
             }
-            //Console.WriteLine(knn.Compute(trainingResult[13366]));
-            /*Console.WriteLine(Array.IndexOf(dictionary, "god"));
-            Console.WriteLine(Array.IndexOf(dictionary, "nonzero"));*/
-            /*for (int i = 1; i <= 10; i++)
-            {
-                gen_test(@"D:\work\KPMG\learning\project1\20_newsgroups", @"D:\work\KPMG\learning\project1\test_data", i, 10);
-            }*/
-            //Console.ReadLine();
         }
 
 
@@ -435,7 +488,7 @@ namespace Classification
                     double TF = System.Convert.ToDouble((int)wordInCategory[word]) / System.Convert.ToDouble(classWordCount);
                     tempWordTable[word] = TF;
                     int temp = 0;
-                    if (classIDFTable.ContainsKey(word))//infinity?
+                    if (classIDFTable.ContainsKey(word))
                     {
                         temp = (int)classIDFTable[word];
                     }
@@ -481,22 +534,84 @@ namespace Classification
             stemmer.stem();
             //Console.WriteLine(stemmer.stem("running"));
             //String word;
-            
+            counter = 0;
             /******Structured Column*****/
+            
             while ((line = file.ReadLine()) != null)
             {
                 //Console.WriteLine(line);
                 if (line.Contains(": "))
                 {
-                    columnCountTable[line.Split(new string[] { ": " }, StringSplitOptions.None)[0].Trim()] = filePath;
+                    string[] splitPart = line.Split(new string[] { ": " }, StringSplitOptions.None);
+                    string columnName = splitPart[0].Trim();
+                    columnCountTable[columnName] = filePath;
+                    string content = splitPart[splitPart.Length-1];
+                    if (columnName.ToLower() == "subject")
+                    {
+                        foreach (string iter_word in Regex.Split(content, @"[^A-Za-z0-9_-]"))
+                        {
+                            wordCount temp;
+                            int wordCountTemp = 0;
+                            String word = iter_word.ToLower().Trim(new Char[] { '_', '-' });
+                            double Num;
+                            bool isNum = double.TryParse(word, out Num);
+                            if (isNum)
+                            {
+                                continue;
+                            }
+                            stemmer.add(word.ToCharArray(), word.Length);
+                            stemmer.stem();
+                            word = stemmer.ToString();
+                            if (word.Length == 0)
+                            {
+                                continue;
+                            }
+                            if (stopWordTable.ContainsKey(word))
+                            {
+                                continue;
+                            }
+                            // word preprocess done
+                            counter += 10;
+                            if (wordInCategory.ContainsKey(word))
+                            {
+                                int count = (int)wordInCategory[word];
+                                count += 1 * subjectWeight;
+                                wordInCategory[word] = count;
+                            }
+                            else
+                            {
+                                wordInCategory[word] = 1 * subjectWeight;
+                            }
+                            if (wordCountTable.ContainsKey(word)) //word already apper
+                            {
+                                temp = (wordCount)wordCountTable[word];
+                                temp.count += 1 * subjectWeight;
+                                if (!docWord.ContainsKey(word))//add DF
+                                {
+                                    temp.DF += 1;
+                                }
+                            }
+                            else
+                            {
+                                temp.count = 1 * subjectWeight;
+                                temp.DF = 1;
+                            }
+                            if (docWord.ContainsKey(word))/****real count word*****/
+                            {
+                                wordCountTemp = (int)docWord[word];
+                            }
+                            wordCountTemp += 1 * subjectWeight;
+                            docWord[word] = wordCountTemp;
+                            wordCountTable[word] = temp;
+                        }
+                    }
                 }
                 else
                 {
                     break;
                 }
-                counter++;
             }
-            counter = 0;
+            
             /******Text******/
             while ((line = file.ReadLine()) != null)
             {
