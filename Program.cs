@@ -54,6 +54,7 @@ namespace Classification
         public static int subjectWeight;
         public static int fromWeight;
         public static int keywordsWeight;
+        public static int newsgroupsWeight;
         public static Hashtable TFIDF()
         {
             Hashtable idfTable = new Hashtable();
@@ -129,6 +130,7 @@ namespace Classification
             Hashtable result = new Hashtable();
             int dicCount = 0;
             List<List<dicWord>> classWordList = new List<List<dicWord>>();
+            StreamWriter file = new StreamWriter(@"D:\work\KPMG\learning\project1\dictionary.csv");
             for (int i = 0; i < classWordTable.Count(); i++)
             {
                 List<dicWord> tempList = new List<dicWord>();
@@ -142,20 +144,22 @@ namespace Classification
                 tempList.Sort((a, b) => b.tfidf.CompareTo(a.tfidf));
                 classWordList.Add(tempList);
             }
-            for (int i = 0; i < 10000; i++)
+            for (int i = 0; i < size; i++)
             {
                 for (int j = 0; j < 20; j++ )
                 {
-                    if (dicCount < 10000)
+                    if (dicCount < size)
                     {
                         if (!result.ContainsKey(classWordList[j][i].word))
                         {
+                            file.WriteLine(dicCount + "," + classWordList[j][i].word + "," + classWordList[j][i].tfidf);
                             result[classWordList[j][i].word] = dicCount;
                             dicCount++;
                         }
                     }
                 }
             }
+            file.Close();
             return result;
         }
         public static void gen_test(string sourcePath, string targetPath, int part, int division)
@@ -193,13 +197,14 @@ namespace Classification
                 }
             }
         }
-        public static double[][] gen_training_data(int docCount,Hashtable dictionary)
+        public static double[][] gen_training_data(int docCount,Hashtable dictionary,int dicSize)
         { 
             double[][] result = new double[docCount][];
             for (int i = 0; i < docFeatureTable.Count; i++)
             {
-                result[i] = new double[10000];
-                for(int j = 0;j<10000;j++) //initial
+                result[i] = new double[dicSize];
+                //GC.Collect();
+                for(int j = 0;j<dicSize;j++) //initial
                     result[i][j] = 0;
                 List<string> wordList = docFeatureTable[i].Keys.Cast<string>().ToList();
                 foreach (string word in wordList)
@@ -213,7 +218,7 @@ namespace Classification
             }
             return result;
         }
-        static public List<testResult> RunTest(string path,Hashtable dictionary , Hashtable idfTable, KNearestNeighbors knn)
+        static public List<testResult> RunTest(string path,Hashtable dictionary ,int dicSize, Hashtable idfTable, KNearestNeighbors knn)
         { 
             List<testResult> result = new List<testResult>();
             //int[] trainingAnswer = new int[17998];
@@ -227,8 +232,8 @@ namespace Classification
                 {
                     Console.WriteLine(Path.GetFileName(file_names[j]));
                     System.IO.StreamReader file = new System.IO.StreamReader(file_names[j]);
-                    double[] featureV = new double[10000];
-                    for(int k = 0;k<10000;k++) //initial
+                    double[] featureV = new double[dicSize];
+                    for(int k = 0;k<dicSize;k++) //initial
                         featureV[k] = 0;
                     String line;
                     int counter = 0;
@@ -284,7 +289,7 @@ namespace Classification
                                     }
                                 }
                             }
-                            if (columnName.ToLower() == "keywords")
+                            /*else if (columnName.ToLower() == "keywords")
                             {
                                 foreach (string iter_word in Regex.Split(content, @"[^A-Za-z0-9_-]"))
                                 {
@@ -320,6 +325,25 @@ namespace Classification
                                     }
                                 }
                             }
+                            if (columnName.ToLower() == "newsgroups")
+                            {
+                                foreach (string iter_word in content.Split(new char[] { ',' }))
+                                {
+                                    String word = iter_word.ToLower().Trim();
+                                    sumWordCount += 1 * newsgroupsWeight;
+                                    // word preprocess done
+                                    if (docWord.ContainsKey(word))
+                                    {
+                                        int temp = (int)docWord[word];
+                                        temp += 1 * newsgroupsWeight;
+                                        docWord[word] = temp;
+                                    }
+                                    else
+                                    {
+                                        docWord[word] = 1 * newsgroupsWeight;
+                                    }
+                                }
+                            }*/
                             /*else if (columnName.ToLower() == "from")
                             {
                                 Regex emailRegex = new Regex(@"\w+([-+.]\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*", RegexOptions.IgnoreCase);
@@ -351,6 +375,10 @@ namespace Classification
                     /******Text******/
                     while ((line = file.ReadLine()) != null)
                     {
+                        if (line.StartsWith(">") || line.StartsWith("|>"))
+                        {
+                            continue;
+                        }
                         //foreach(string iter_word in line.Split(new Char [] {' ', ',', '.', ':', '\t', '\n' }))
                         foreach (string iter_word in Regex.Split(line, @"[^A-Za-z0-9_-]"))
                         {
@@ -409,7 +437,8 @@ namespace Classification
         }
         static void Main(string[] args)
         {
-            for (int j = 15; j < 16; j += 3)
+            //for (int j = 1000; j < 1001; j += 1)
+            int j = 5000;
             {
                 columnCountTable = new Hashtable();
                 wordCountTable = new Hashtable();
@@ -421,7 +450,8 @@ namespace Classification
                 GC.Collect();
                 subjectWeight = 5;
                 fromWeight = 0;
-                keywordsWeight = 10;
+                keywordsWeight = 3;
+                newsgroupsWeight = 20;
                 //Console.WriteLine(test());
                 //String text = System.IO.File.ReadAllLines();
                 Hashtable process_dictionary = new Hashtable();
@@ -436,7 +466,7 @@ namespace Classification
                 //StreamWriter dicFile = new StreamWriter(@"D:\work\KPMG\learning\project1\dictionary_1.txt");
                 Hashtable idfTable = TFIDF();
                 idfTable = classIDFTable;
-                Hashtable dictionary = gen_dic(10000);
+                Hashtable dictionary = gen_dic(j);
                 /*for (int i = 0; i < docFeatureTable.Count; i++)
                 {
                     List<string> wordList = docFeatureTable[i].Keys.Cast<string>().ToList();
@@ -470,14 +500,14 @@ namespace Classification
                 }*/
                 var trainingResult = new double[trainingAnswer.Count()][];
                 GC.Collect();
-                trainingResult = gen_training_data(trainingAnswer.Count(), dictionary);
+                trainingResult = gen_training_data(trainingAnswer.Count(), dictionary, j);
                 KNearestNeighbors knn;
                 //for (int i = 3; i <= 10; i++)
                 //{
                 int i = 3;
                 Console.WriteLine("======================" + i + "======================");
                 knn = new KNearestNeighbors(k: i, classes: 20, inputs: trainingResult, outputs: trainingAnswer);
-                List<testResult> result = RunTest(@"D:\work\KPMG\learning\project1\test_data\1\Testing", dictionary, idfTable, knn);
+                List<testResult> result = RunTest(@"D:\work\KPMG\learning\project1\test_data\1\Testing", dictionary,j, idfTable, knn);
                 System.IO.Directory.CreateDirectory(@"D:\work\KPMG\learning\project1\result\" + j);
                 StreamWriter resultFile = new StreamWriter(@"D:\work\KPMG\learning\project1\result\" + j + "\\test_result.csv");
                 StreamWriter statisticFile = new StreamWriter(@"D:\work\KPMG\learning\project1\result\" + j + "\\test_statistic.csv");
@@ -665,6 +695,48 @@ namespace Classification
                             wordCountTable[word] = temp;
                         }
                     }
+                    /*else if (columnName.ToLower() == "newsgroups")
+                    {
+                        foreach (string iter_word in content.Split(new char[]{','}))
+                        {
+                            wordCount temp;
+                            int wordCountTemp = 0;
+                            String word = iter_word.ToLower().Trim();
+                            // word preprocess done
+                            counter += 1 * newsgroupsWeight;
+                            if (wordInCategory.ContainsKey(word))
+                            {
+                                int count = (int)wordInCategory[word];
+                                count += 1 * newsgroupsWeight;
+                                wordInCategory[word] = count;
+                            }
+                            else
+                            {
+                                wordInCategory[word] = 1 * newsgroupsWeight;
+                            }
+                            if (wordCountTable.ContainsKey(word)) //word already apper
+                            {
+                                temp = (wordCount)wordCountTable[word];
+                                temp.count += 1 * newsgroupsWeight;
+                                if (!docWord.ContainsKey(word))//add DF
+                                {
+                                    temp.DF += 1;
+                                }
+                            }
+                            else
+                            {
+                                temp.count = 1 * newsgroupsWeight;
+                                temp.DF = 1;
+                            }
+                            if (docWord.ContainsKey(word))*//****real count word*****/
+                           /* {
+                                wordCountTemp = (int)docWord[word];
+                            }
+                            wordCountTemp += 1 * newsgroupsWeight;
+                            docWord[word] = wordCountTemp;
+                            wordCountTable[word] = temp;
+                        }
+                    }
                     else if (columnName.ToLower() == "keywords")
                     {
                         foreach (string iter_word in Regex.Split(content, @"[^A-Za-z0-9_-]"))
@@ -715,15 +787,15 @@ namespace Classification
                                 temp.count = 1 * keywordsWeight;
                                 temp.DF = 1;
                             }
-                            if (docWord.ContainsKey(word))/****real count word*****/
-                            {
+                            if (docWord.ContainsKey(word))*//****real count word*****/
+                            /*{
                                 wordCountTemp = (int)docWord[word];
                             }
                             wordCountTemp += 1 * keywordsWeight;
                             docWord[word] = wordCountTemp;
                             wordCountTable[word] = temp;
                         }
-                    }
+                    }*/
                     /*else if (columnName.ToLower() == "from")
                     {
                         Regex emailRegex = new Regex(@"\w+([-+.]\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*",RegexOptions.IgnoreCase);
@@ -779,6 +851,10 @@ namespace Classification
             /******Text******/
             while ((line = file.ReadLine()) != null)
             {
+                if (line.StartsWith(">") || line.StartsWith("|>"))
+                {
+                    continue;
+                }
                 //foreach(string iter_word in line.Split(new Char [] {' ', ',', '.', ':', '\t', '\n' }))
                 foreach (string iter_word in Regex.Split(line, @"[^A-Za-z0-9_-]"))
                 {
