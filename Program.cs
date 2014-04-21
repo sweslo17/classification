@@ -52,7 +52,8 @@ namespace Classification
         public static List<Hashtable> classWordTable;
         public static Hashtable classIDFTable;
         public static int subjectWeight;
-
+        public static int fromWeight;
+        public static int keywordsWeight;
         public static Hashtable TFIDF()
         {
             Hashtable idfTable = new Hashtable();
@@ -123,9 +124,9 @@ namespace Classification
             }
             return idfTable;
         }*/
-        public static string[] gen_dic(int size)
+        public static Hashtable gen_dic(int size)
         {
-            string[] result = new string[10000];
+            Hashtable result = new Hashtable();
             int dicCount = 0;
             List<List<dicWord>> classWordList = new List<List<dicWord>>();
             for (int i = 0; i < classWordTable.Count(); i++)
@@ -147,9 +148,9 @@ namespace Classification
                 {
                     if (dicCount < 10000)
                     {
-                        if (Array.IndexOf(result, classWordList[j][i].word) == -1)
+                        if (!result.ContainsKey(classWordList[j][i].word))
                         {
-                            result[dicCount] = classWordList[j][i].word;
+                            result[classWordList[j][i].word] = dicCount;
                             dicCount++;
                         }
                     }
@@ -192,7 +193,7 @@ namespace Classification
                 }
             }
         }
-        public static double[][] gen_training_data(int docCount,string[] dictionary)
+        public static double[][] gen_training_data(int docCount,Hashtable dictionary)
         { 
             double[][] result = new double[docCount][];
             for (int i = 0; i < docFeatureTable.Count; i++)
@@ -203,16 +204,16 @@ namespace Classification
                 List<string> wordList = docFeatureTable[i].Keys.Cast<string>().ToList();
                 foreach (string word in wordList)
                 {
-                    int j = Array.IndexOf(dictionary,word);
-                    if(j != -1)
+                    if(dictionary.ContainsKey(word))
                     {
+                        int j = (int)dictionary[word];
                         result[i][j] = (double)docFeatureTable[i][word];
                     }
                 }
             }
             return result;
         }
-        static public List<testResult> RunTest(string path, string[] dictionary , Hashtable idfTable, KNearestNeighbors knn)
+        static public List<testResult> RunTest(string path,Hashtable dictionary , Hashtable idfTable, KNearestNeighbors knn)
         { 
             List<testResult> result = new List<testResult>();
             //int[] trainingAnswer = new int[17998];
@@ -283,6 +284,63 @@ namespace Classification
                                     }
                                 }
                             }
+                            if (columnName.ToLower() == "keywords")
+                            {
+                                foreach (string iter_word in Regex.Split(content, @"[^A-Za-z0-9_-]"))
+                                {
+                                    String word = iter_word.ToLower().Trim(new Char[] { '_', '-' });
+                                    double Num;
+                                    bool isNum = double.TryParse(word, out Num);
+                                    if (isNum)
+                                    {
+                                        continue;
+                                    }
+                                    stemmer.add(word.ToCharArray(), word.Length);
+                                    stemmer.stem();
+                                    word = stemmer.ToString();
+                                    if (word.Length == 0)
+                                    {
+                                        continue;
+                                    }
+                                    if (stopWordTable.ContainsKey(word))
+                                    {
+                                        continue;
+                                    }
+                                    sumWordCount += 1 * keywordsWeight;
+                                    // word preprocess done
+                                    if (docWord.ContainsKey(word))
+                                    {
+                                        int temp = (int)docWord[word];
+                                        temp += 1 * keywordsWeight;
+                                        docWord[word] = temp;
+                                    }
+                                    else
+                                    {
+                                        docWord[word] = 1 * keywordsWeight;
+                                    }
+                                }
+                            }
+                            /*else if (columnName.ToLower() == "from")
+                            {
+                                Regex emailRegex = new Regex(@"\w+([-+.]\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*", RegexOptions.IgnoreCase);
+                                //find items that matches with our pattern
+                                MatchCollection emailMatches = emailRegex.Matches(content);
+                                foreach (Match emailMatch in emailMatches)
+                                {
+                                    String word = emailMatch.Value;
+                                    // word preprocess done
+                                    if (docWord.ContainsKey(word))
+                                    {
+                                        int temp = (int)docWord[word];
+                                        temp += 1 * fromWeight;
+                                        docWord[word] = temp;
+                                    }
+                                    else
+                                    {
+                                        docWord[word] = 1 * fromWeight;
+                                    }
+                                }
+                            }*/
                         }
                         else
                         {
@@ -330,9 +388,9 @@ namespace Classification
                     }// line end
                     foreach (string word in docWord.Keys)
                     {
-                        int indexOfDic = Array.IndexOf(dictionary, word);
-                        if (indexOfDic != -1)
+                        if (dictionary.ContainsKey(word))
                         {
+                            int indexOfDic = (int)dictionary[word];
                             double TF = System.Convert.ToDouble((int)docWord[word])/System.Convert.ToDouble(sumWordCount);
                             double IDF = (double)idfTable[word];
                             featureV[indexOfDic] = TF * IDF;
@@ -351,7 +409,7 @@ namespace Classification
         }
         static void Main(string[] args)
         {
-            for (int j = 10; j < 11; j += 3)
+            for (int j = 15; j < 16; j += 3)
             {
                 columnCountTable = new Hashtable();
                 wordCountTable = new Hashtable();
@@ -361,7 +419,9 @@ namespace Classification
                 classWordTable = new List<Hashtable>();
                 classIDFTable = new Hashtable();
                 GC.Collect();
-                subjectWeight = j;
+                subjectWeight = 5;
+                fromWeight = 0;
+                keywordsWeight = 10;
                 //Console.WriteLine(test());
                 //String text = System.IO.File.ReadAllLines();
                 Hashtable process_dictionary = new Hashtable();
@@ -376,7 +436,7 @@ namespace Classification
                 //StreamWriter dicFile = new StreamWriter(@"D:\work\KPMG\learning\project1\dictionary_1.txt");
                 Hashtable idfTable = TFIDF();
                 idfTable = classIDFTable;
-                string[] dictionary = gen_dic(10000);
+                Hashtable dictionary = gen_dic(10000);
                 /*for (int i = 0; i < docFeatureTable.Count; i++)
                 {
                     List<string> wordList = docFeatureTable[i].Keys.Cast<string>().ToList();
@@ -571,7 +631,7 @@ namespace Classification
                                 continue;
                             }
                             // word preprocess done
-                            counter += 10;
+                            counter += 1 * subjectWeight;
                             if (wordInCategory.ContainsKey(word))
                             {
                                 int count = (int)wordInCategory[word];
@@ -605,6 +665,110 @@ namespace Classification
                             wordCountTable[word] = temp;
                         }
                     }
+                    else if (columnName.ToLower() == "keywords")
+                    {
+                        foreach (string iter_word in Regex.Split(content, @"[^A-Za-z0-9_-]"))
+                        {
+                            wordCount temp;
+                            int wordCountTemp = 0;
+                            String word = iter_word.ToLower().Trim(new Char[] { '_', '-' });
+                            double Num;
+                            bool isNum = double.TryParse(word, out Num);
+                            if (isNum)
+                            {
+                                continue;
+                            }
+                            stemmer.add(word.ToCharArray(), word.Length);
+                            stemmer.stem();
+                            word = stemmer.ToString();
+                            if (word.Length == 0)
+                            {
+                                continue;
+                            }
+                            if (stopWordTable.ContainsKey(word))
+                            {
+                                continue;
+                            }
+                            // word preprocess done
+                            counter += 1 * keywordsWeight;
+                            if (wordInCategory.ContainsKey(word))
+                            {
+                                int count = (int)wordInCategory[word];
+                                count += 1 * keywordsWeight;
+                                wordInCategory[word] = count;
+                            }
+                            else
+                            {
+                                wordInCategory[word] = 1 * keywordsWeight;
+                            }
+                            if (wordCountTable.ContainsKey(word)) //word already apper
+                            {
+                                temp = (wordCount)wordCountTable[word];
+                                temp.count += 1 * keywordsWeight;
+                                if (!docWord.ContainsKey(word))//add DF
+                                {
+                                    temp.DF += 1;
+                                }
+                            }
+                            else
+                            {
+                                temp.count = 1 * keywordsWeight;
+                                temp.DF = 1;
+                            }
+                            if (docWord.ContainsKey(word))/****real count word*****/
+                            {
+                                wordCountTemp = (int)docWord[word];
+                            }
+                            wordCountTemp += 1 * keywordsWeight;
+                            docWord[word] = wordCountTemp;
+                            wordCountTable[word] = temp;
+                        }
+                    }
+                    /*else if (columnName.ToLower() == "from")
+                    {
+                        Regex emailRegex = new Regex(@"\w+([-+.]\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*",RegexOptions.IgnoreCase);
+                        //find items that matches with our pattern
+                        MatchCollection emailMatches = emailRegex.Matches(content);
+                        foreach (Match emailMatch in emailMatches)
+                        {
+                            wordCount temp;
+                            int wordCountTemp = 0;
+                            String word = emailMatch.Value;
+                            // word preprocess done
+                            counter += 1 * fromWeight;
+                            if (wordInCategory.ContainsKey(word))
+                            {
+                                int count = (int)wordInCategory[word];
+                                count += 1 * fromWeight;
+                                wordInCategory[word] = count;
+                            }
+                            else
+                            {
+                                wordInCategory[word] = 1 * fromWeight;
+                            }
+                            if (wordCountTable.ContainsKey(word)) //word already apper
+                            {
+                                temp = (wordCount)wordCountTable[word];
+                                temp.count += 1 * fromWeight;
+                                if (!docWord.ContainsKey(word))//add DF
+                                {
+                                    temp.DF += 1;
+                                }
+                            }
+                            else
+                            {
+                                temp.count = 1 * fromWeight;
+                                temp.DF = 1;
+                            }
+                            if (docWord.ContainsKey(word))*//****real count word*****/
+                            /*{
+                                wordCountTemp = (int)docWord[word];
+                            }
+                            wordCountTemp += 1 * fromWeight;
+                            docWord[word] = wordCountTemp;
+                            wordCountTable[word] = temp;
+                        }
+                    }*/
                 }
                 else
                 {
